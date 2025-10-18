@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bisnis Martabak - Member Portal</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 0; display: flex; }
+        .sidebar { width: 200px; background: #333; color: white; height: 100vh; padding: 20px; position: fixed; left: 0; top: 0; }
+        .sidebar a { display: block; color: white; text-decoration: none; margin: 10px 0; padding: 10px; border-radius: 5px; }
+        .sidebar a:hover { background: #555; }
+        .content { margin-left: 220px; padding: 20px; width: calc(100% - 220px); }
+        form { max-width: 400px; margin: auto; }
+        input, button { display: block; width: 100%; margin: 10px 0; padding: 10px; }
+        .hidden { display: none; }
+        .qr { text-align: center; margin: 20px; }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <h2>Menu</h2>
+        <a href="#" onclick="showPage('home')">Beranda</a>
+        <a href="#" onclick="showPage('register')">Daftar Member</a>
+        <a href="#" onclick="showPage('login')">Login Member</a>
+        <a href="#" onclick="showPage('admin')">Login Admin</a>
+        <a href="#" onclick="showPage('about')">Tentang Kami</a>
+    </div>
+    <div class="content">
+        <div id="home" class="page">
+            <h1>Selamat Datang di Bisnis Martabak</h1>
+            <p>Daftar sebagai member untuk dapatkan diskon dan poin reward!</p>
+        </div>
+        <div id="register" class="page hidden">
+            <h2>Daftar Member</h2>
+            <form id="registerForm">
+                <input type="text" id="name" placeholder="Nama Lengkap" required>
+                <input type="email" id="email" placeholder="Email" required>
+                <input type="password" id="password" placeholder="Kata Sandi" required>
+                <input type="text" id="phone" placeholder="Nomor Telepon" required>
+                <input type="text" id="address" placeholder="Alamat" required>
+                <button type="submit">Daftar</button>
+            </form>
+            <div id="qrContainer" class="hidden qr"></div>
+        </div>
+        <div id="login" class="page hidden">
+            <h2>Login Member</h2>
+            <form id="loginForm">
+                <input type="email" id="loginEmail" placeholder="Email" required>
+                <input type="password" id="loginPassword" placeholder="Kata Sandi" required>
+                <button type="submit">Login</button>
+            </form>
+            <a href="https://wa.me/083801928405">Lupa Kata Sandi?</a>
+        </div>
+        <div id="admin" class="page hidden">
+            <h2>Login Admin</h2>
+            <form id="adminForm">
+                <input type="text" id="adminUser" placeholder="Username" required>
+                <input type="password" id="adminPass" placeholder="Password" required>
+                <button type="submit">Login</button>
+            </form>
+            <div id="adminPanel" class="hidden">
+                <h3>Panel Admin</h3>
+                <input type="text" id="searchId" placeholder="ID Member">
+                <button onclick="searchMember()">Cari Member</button>
+                <button onclick="scanQR()">Scan QR</button>
+                <div id="memberInfo"></div>
+                <form id="transactionForm">
+                    <input type="text" id="transMemberId" placeholder="ID Member" required>
+                    <input type="number" id="transAmount" placeholder="Jumlah Pembelian (Rp)" required>
+                    <input type="text" id="transDesc" placeholder="Deskripsi" required>
+                    <button type="submit">Tambah Transaksi</button>
+                </form>
+            </div>
+        </div>
+        <div id="about" class="page hidden">
+            <h2>Tentang Kami</h2>
+            <p>Bisnis martabak dengan program member untuk diskon dan poin reward.</p>
+        </div>
+        <div id="dashboard" class="page hidden">
+            <h2>Dashboard Member</h2>
+            <p id="welcome"></p>
+            <p>Poin Anda: <span id="points">0</span></p>
+            <p>Kode Diskon: DISKON20</p>
+            <h3>Riwayat Transaksi</h3>
+            <ul id="transactions"></ul>
+            <button onclick="logout()">Logout</button>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bcryptjs/2.4.3/bcrypt.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/instascan@1.0.0/dist/instascan.min.js"></script>
+    <script>
+        const memberUrl = 'https://script.google.com/macros/s/AKfycbyLSluLsklHd527kJnGb4hu9HOtd8sYc9XvnNKbPCGt64WjDCO013P5mTpeSZ2bd9ZivQ/exec';
+        const transUrl = 'https://script.google.com/macros/s/AKfycbzpAqzjXBLC3Iv_vKQl5lA9PLWxFFeSZJvrZ_Fw9YlOmftJu0F_4TDJiTE9LYw8RaE/exec';
+        let currentUser = null;
+
+        function showPage(page) {
+            document.querySelectorAll('.page').forEach(p => p.classList.add('hidden'));
+            document.getElementById(page).classList.remove('hidden');
+        }
+
+        // Register
+        document.getElementById('registerForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const hashedPass = bcrypt.hashSync(document.getElementById('password').value, 10);
+            const data = new URLSearchParams({
+                action: 'register',
+                name: document.getElementById('name').value,
+                email: document.getElementById('email').value,
+                password: hashedPass,
+                phone: document.getElementById('phone').value,
+                address: document.getElementById('address').value
+            });
+            const res = await fetch(memberUrl, { method: 'POST', body: data });
+            const result = await res.text();
+            alert(result);
+            if (result.includes('Registered')) {
+                const qrUrl = result.split('QR: ')[1];
+                QRCode.toCanvas(document.getElementById('qrContainer'), qrUrl, () => {
+                    document.getElementById('qrContainer').classList.remove('hidden');
+                });
+            }
+        });
+
+        // Login Member
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const data = new URLSearchParams({
+                action: 'login',
+                email: document.getElementById('loginEmail').value,
+                password: bcrypt.hashSync(document.getElementById('loginPassword').value, 10)
+            });
+            const res = await fetch(memberUrl, { method: 'POST', body: data });
+            const result = await res.json();
+            if (result.id) {
+                currentUser = result;
+                loadDashboard();
+                showPage('dashboard');
+            } else {
+                alert('Login gagal');
+            }
+        });
+
+        // Admin Login
+        document.getElementById('adminForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            if (document.getElementById('adminUser').value === 'martabak' && document.getElementById('adminPass').value === '189189') {
+                document.getElementById('adminPanel').classList.remove('hidden');
+            } else {
+                alert('Login admin gagal');
+            }
+        });
+
+        // Search Member
+        async function searchMember() {
+            const id = document.getElementById('searchId').value;
+            // Assume cross-sheet or add to script; for now, placeholder
+            document.getElementById('memberInfo').innerHTML = `Member ID: ${id} - (Data dari sheet)`;
+        }
+
+        // Scan QR
+        function scanQR() {
+            const scanner = new Instascan.Scanner({ video: document.createElement('video') });
+            scanner.addListener('scan', (content) => {
+                document.getElementById('searchId').value = content;
+                scanner.stop();
+            });
+            Instascan.Camera.getCameras().then(cameras => {
+                if (cameras.length > 0) scanner.start(cameras[0]);
+            });
+        }
+
+        // Add Transaction
+        document.getElementById('transactionForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const data = new URLSearchParams({
+                action: 'addTransaction',
+                memberId: document.getElementById('transMemberId').value,
+                amount: document.getElementById('transAmount').value,
+                description: document.getElementById('transDesc').value
+            });
+            await fetch(transUrl, { method: 'POST', body: data });
+            alert('Transaksi ditambahkan');
+        });
+
+        // Load Dashboard
+        async function loadDashboard() {
+            const data = new URLSearchParams({ action: 'getTransactions', memberId: currentUser.id });
+            const res = await fetch(transUrl, { method: 'POST', body: data });
+            const result = await res.json();
+            document.getElementById('welcome').textContent = `Selamat datang, ${currentUser.name}`;
+            document.getElementById('points').textContent = result.totalPoints;
+            document.getElementById('transactions').innerHTML = result.transactions.map(t => `<li>${t.date}: ${t.desc} - ${t.points} poin</li>`).join('');
+        }
+
+        // Logout
+        function logout() {
+            currentUser = null;
+            showPage('home');
+        }
+
+        showPage('home');
+    </script>
+</body>
+</html>
